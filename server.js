@@ -6,19 +6,19 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ─── State (server-side) ─────────────────────────────────────────
+// ─── State ───────────────────────────────────────────────────────
 let irStatus = [0, 0, 0, 0];
 let spotState = [
-  { state: 'free', bookedAt: null },
-  { state: 'free', bookedAt: null },
-  { state: 'free', bookedAt: null },
-  { state: 'free', bookedAt: null },
+  { state: 'free', bookedAt: null, manualParked: false },
+  { state: 'free', bookedAt: null, manualParked: false },
+  { state: 'free', bookedAt: null, manualParked: false },
+  { state: 'free', bookedAt: null, manualParked: false },
 ];
 let pendingCmds = [];
 
 const EXPIRE_MS = 30 * 60 * 1000;
 
-// Auto-expire reservations after 30 min
+// Auto-expire reservations
 setInterval(() => {
   const now = Date.now();
   spotState.forEach((sp, i) => {
@@ -26,6 +26,7 @@ setInterval(() => {
       console.log(`Spot ${i} reservation expired`);
       sp.state = 'free';
       sp.bookedAt = null;
+      sp.manualParked = false;
       pendingCmds.push({ spot: i, action: 'open' });
     }
   });
@@ -37,23 +38,27 @@ app.post('/esp/sync', (req, res) => {
   if (Array.isArray(spots)) {
     spots.forEach((occupied, i) => {
       irStatus[i] = occupied;
-      const prev = spotState[i].state;
+      const sp = spotState[i];
 
-      // Car detected in a booked spot -> they arrived, mark as parked
-      if (occupied && prev === 'booked') {
-        spotState[i].state = 'parked';
+      if (sp.manualParked) {
+        // User clicked "I am here" — ignore IR until they click "Leave"
+        // Only free it if IR confirms car is gone AND user clicks leave
+        return;
       }
-      // Car gone from a parked spot -> free it
-      if (!occupied && prev === 'parked') {
-        spotState[i].state = 'free';
-        spotState[i].bookedAt = null;
+
+      if (occupied && sp.state === 'booked') {
+        // Car arrived at booked spot
+        sp.state = 'parked';
       }
-      // Unknown car in a free spot -> parked
-      if (occupied && prev === 'free') {
-        spotState[i].state = 'parked';
+      if (!occupied && sp.state === 'parked') {
+        // Car physically left
+        sp.state = 'free';
+        sp.bookedAt = null;
       }
-      // IR = 0 does NOT touch 'booked' state —
-      // car hasn't arrived yet, don't reset reservation
+      if (occupied && sp.state === 'free') {
+        // Unknown car pulled in
+        sp.state = 'parked';
+      }
     });
   }
   const cmds = [...pendingCmds];
@@ -78,16 +83,19 @@ app.post('/api/reserve', (req, res) => {
     return res.status(409).json({ error: 'Spot not free' });
   spotState[spot].state = 'booked';
   spotState[spot].bookedAt = Date.now();
+  spotState[spot].manualParked = false;
   pendingCmds.push({ spot, action: 'close' });
   res.json({ ok: true, bookedAt: spotState[spot].bookedAt });
 });
 
 // ─── Browser: arrive ─────────────────────────────────────────────
+// Sets manualParked = true so IR cannot override the parked state
 app.post('/api/arrive', (req, res) => {
   const { spot } = req.body;
   if (spot === undefined || spot < 0 || spot > 3)
     return res.status(400).json({ error: 'Bad spot' });
   spotState[spot].state = 'parked';
+  spotState[spot].manualParked = true;  // ← key fix
   pendingCmds.push({ spot, action: 'open' });
   res.json({ ok: true });
 });
@@ -99,6 +107,7 @@ app.post('/api/release', (req, res) => {
     return res.status(400).json({ error: 'Bad spot' });
   spotState[spot].state = 'free';
   spotState[spot].bookedAt = null;
+  spotState[spot].manualParked = false;  // ← allow IR again
   pendingCmds.push({ spot, action: 'open' });
   res.json({ ok: true });
 });
