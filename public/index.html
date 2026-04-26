@@ -25,7 +25,7 @@
   .spot:active { transform: scale(0.97); }
   .spot.free   { border-color: #34c759; }
   .spot.taken  { border-color: #ff3b30; background: #fff5f5; cursor: default; }
-  .spot.booked { border-color: #ff9500; }
+  .spot.booked { border-color: #ff9500; cursor: default; }
   .spot.mine   { border-color: #007aff; }
   .spot-icon { font-size: 30px; margin-bottom: 6px; }
   .spot-name { font-size: 16px; font-weight: 600; }
@@ -43,7 +43,7 @@
   .timer-fill { height: 100%; border-radius: 2px; background: #ff9500; transition: width .5s; }
   .timer-txt { font-size: 11px; color: #888; margin-top: 4px; }
   .rate-box { background: #fff; border-radius: 12px; padding: 12px 14px; font-size: 13px; color: #555; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: flex-end; justify-content: center; padding: 0; }
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: flex-end; justify-content: center; }
   .modal-bg.open { display: flex; }
   .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 20px 20px 32px; width: 100%; max-width: 480px; }
   .modal-handle { width: 36px; height: 4px; background: #ddd; border-radius: 2px; margin: 0 auto 16px; }
@@ -54,12 +54,12 @@
   .cost-amt { font-size: 24px; font-weight: 600; }
   .cost-sub { font-size: 11px; color: #888; margin-top: 4px; }
   .notice { background: #fff8ec; border: 1px solid #ffd080; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #7a4f00; margin-bottom: 14px; line-height: 1.5; }
-  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; margin-bottom: 8px; -webkit-tap-highlight-color: transparent; }
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; margin-bottom: 8px; }
   .btn:active { opacity: .8; }
-  .btn-blue    { background: #007aff; color: #fff; }
-  .btn-green   { background: #34c759; color: #fff; }
-  .btn-red     { background: #ff3b30; color: #fff; }
-  .btn-gray    { background: #e5e5ea; color: #1d1d1f; }
+  .btn-blue  { background: #007aff; color: #fff; }
+  .btn-green { background: #34c759; color: #fff; }
+  .btn-red   { background: #ff3b30; color: #fff; }
+  .btn-gray  { background: #e5e5ea; color: #1d1d1f; }
   .price-tag { font-size: 22px; font-weight: 600; margin-bottom: 14px; }
   .price-tag span { font-size: 14px; color: #888; font-weight: 400; }
 </style>
@@ -93,78 +93,104 @@
 <script>
 const RATE = 0.05;
 const EXPIRE_MIN = 30;
+const LABELS = ['A1','A2','B1','B2'];
 
-const spots = [
-  { id: 0, label: 'A1', irOccupied: false, state: 'free', bookedAt: null },
-  { id: 1, label: 'A2', irOccupied: false, state: 'free', bookedAt: null },
-  { id: 2, label: 'B1', irOccupied: false, state: 'free', bookedAt: null },
-  { id: 3, label: 'B2', irOccupied: false, state: 'free', bookedAt: null },
+// My session — stored in localStorage so it survives page refresh
+let mySpot     = localStorage.getItem('mySpot')     !== null ? parseInt(localStorage.getItem('mySpot')) : null;
+let myBookedAt = localStorage.getItem('myBookedAt') !== null ? parseInt(localStorage.getItem('myBookedAt')) : null;
+let myPhase    = localStorage.getItem('myPhase')    || null; // 'booked' | 'parked'
+
+// Server state (updated every 3s)
+let serverStates = [
+  { state: 'free', bookedAt: null },
+  { state: 'free', bookedAt: null },
+  { state: 'free', bookedAt: null },
+  { state: 'free', bookedAt: null },
 ];
 
-let mySpot = null;
-let myBookedAt = null;
-let expireTimer = null;
+function saveSession() {
+  if (mySpot !== null) {
+    localStorage.setItem('mySpot', mySpot);
+    localStorage.setItem('myBookedAt', myBookedAt);
+    localStorage.setItem('myPhase', myPhase);
+  } else {
+    localStorage.removeItem('mySpot');
+    localStorage.removeItem('myBookedAt');
+    localStorage.removeItem('myPhase');
+  }
+}
+
+function clearSession() {
+  mySpot = null; myBookedAt = null; myPhase = null;
+  saveSession();
+}
 
 async function pollStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res  = await fetch('/api/status');
     const data = await res.json();
-    data.spots.forEach((occupied, i) => {
-      spots[i].irOccupied = occupied === 1;
-      if (spots[i].irOccupied && spots[i].state === 'free') spots[i].state = 'taken';
-      if (!spots[i].irOccupied && spots[i].state === 'taken') spots[i].state = 'free';
-    });
+    serverStates = data.states;
+
+    // If server says my spot is free but I think I have it -> session expired server-side
+    if (mySpot !== null && serverStates[mySpot].state === 'free' && myPhase) {
+      clearSession();
+    }
     render();
   } catch(e) { console.log('Poll failed:', e); }
 }
 
-async function gateCommand(spotId, action) {
-  try {
-    await fetch('/api/gate?spot=' + spotId + '&action=' + action);
-  } catch(e) { console.log('Gate command failed:', e); }
+async function apiPost(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res;
 }
 
 function minsElapsed(ts) { return Math.floor((Date.now() - ts) / 60000); }
-function calcCost(ts) { return (minsElapsed(ts) * RATE).toFixed(2); }
+function calcCost(ts)    { return (minsElapsed(ts) * RATE).toFixed(2); }
 
 function render() {
   const grid = document.getElementById('spots-grid');
   grid.innerHTML = '';
   let free = 0, res = 0, occ = 0;
 
-  spots.forEach(sp => {
-    const isMine = mySpot === sp.id;
-    let displayState = sp.state;
-    if (isMine && sp.state === 'booked') displayState = 'mine-booked';
-    if (isMine && sp.state === 'parked') displayState = 'mine-parked';
-    if (sp.state === 'free') free++;
-    else if (sp.state === 'taken') occ++;
+  serverStates.forEach((sp, i) => {
+    const isMine = mySpot === i;
+    let display = sp.state; // free | booked | parked
+    if (isMine && myPhase === 'booked') display = 'mine-booked';
+    if (isMine && myPhase === 'parked') display = 'mine-parked';
+
+    if (sp.state === 'free')   free++;
+    else if (sp.state === 'parked') occ++;
     else if (sp.state === 'booked') res++;
 
-    const icons  = { free:'🟢', taken:'🔴', booked:'🟠', 'mine-booked':'🔵', 'mine-parked':'🔵' };
-    const labels = { free:'Available', taken:'Occupied', booked:'Reserved', 'mine-booked':'Your reservation', 'mine-parked':'You are parked' };
-    const subCls = { free:'sub-free', taken:'sub-taken', booked:'sub-booked', 'mine-booked':'sub-mine', 'mine-parked':'sub-mine' };
-    const bdgTxt = { free:'FREE', taken:'TAKEN', booked:'RESERVED', 'mine-booked':'MINE', 'mine-parked':'PARKED' };
-    const bdgCls = { free:'badge-free', taken:'badge-taken', booked:'badge-booked', 'mine-booked':'badge-mine', 'mine-parked':'badge-mine' };
-    const spotCls= { free:'free', taken:'taken', booked:'booked', 'mine-booked':'mine', 'mine-parked':'mine' };
+    const icons  = { free:'🟢', parked:'🔴', booked:'🟠', 'mine-booked':'🔵', 'mine-parked':'🔵' };
+    const labels = { free:'Available', parked:'Occupied', booked:'Reserved', 'mine-booked':'Your reservation', 'mine-parked':'You are parked' };
+    const subCls = { free:'sub-free', parked:'sub-taken', booked:'sub-booked', 'mine-booked':'sub-mine', 'mine-parked':'sub-mine' };
+    const bdgTxt = { free:'FREE', parked:'TAKEN', booked:'RESERVED', 'mine-booked':'MINE', 'mine-parked':'PARKED' };
+    const bdgCls = { free:'badge-free', parked:'badge-taken', booked:'badge-booked', 'mine-booked':'badge-mine', 'mine-parked':'badge-mine' };
+    const spotCls= { free:'free', parked:'taken', booked:'booked', 'mine-booked':'mine', 'mine-parked':'mine' };
 
     let timerHTML = '';
-    if (sp.state === 'booked' && sp.bookedAt) {
-      const pct = Math.min(100, (minsElapsed(sp.bookedAt) / EXPIRE_MIN) * 100);
-      const rem = Math.max(0, EXPIRE_MIN - minsElapsed(sp.bookedAt));
+    const bookedAt = isMine ? myBookedAt : sp.bookedAt;
+    if ((display === 'booked' || display === 'mine-booked') && bookedAt) {
+      const pct = Math.min(100, (minsElapsed(bookedAt) / EXPIRE_MIN) * 100);
+      const rem = Math.max(0, EXPIRE_MIN - minsElapsed(bookedAt));
       timerHTML = '<div class="timer-bar"><div class="timer-fill" style="width:' + pct + '%"></div></div>'
                 + '<div class="timer-txt">Expires in ' + rem + ' min</div>';
     }
 
     const div = document.createElement('div');
-    div.className = 'spot ' + (spotCls[displayState] || 'free');
+    div.className = 'spot ' + (spotCls[display] || 'free');
     div.innerHTML =
-      '<div class="spot-icon">' + (icons[displayState]||'⬜') + '</div>' +
-      '<div class="spot-name">Spot ' + sp.label + '</div>' +
-      '<div class="spot-sub ' + (subCls[displayState]||'') + '">' + (labels[displayState]||'') + '</div>' +
-      '<span class="badge ' + (bdgCls[displayState]||'') + '">' + (bdgTxt[displayState]||'') + '</span>' +
+      '<div class="spot-icon">' + (icons[display]||'⬜') + '</div>' +
+      '<div class="spot-name">Spot ' + LABELS[i] + '</div>' +
+      '<div class="spot-sub ' + (subCls[display]||'') + '">' + (labels[display]||'') + '</div>' +
+      '<span class="badge ' + (bdgCls[display]||'') + '">' + (bdgTxt[display]||'') + '</span>' +
       timerHTML;
-    div.onclick = () => spotClick(sp.id);
+    div.onclick = () => spotClick(i);
     grid.appendChild(div);
   });
 
@@ -173,120 +199,87 @@ function render() {
   document.getElementById('st-occ').textContent  = occ;
 }
 
-function spotClick(id) {
-  const sp = spots[id];
-  const isMine = mySpot === id;
-  if (isMine && sp.state === 'booked') { showMyReservation(sp); return; }
-  if (isMine && sp.state === 'parked') { showParked(sp); return; }
-  if (sp.state === 'free')             { showBook(sp); return; }
-  if (sp.state === 'taken')            { showUnavail(sp, true); return; }
-  if (sp.state === 'booked')           { showUnavail(sp, false); return; }
+function spotClick(i) {
+  const sp = serverStates[i];
+  const isMine = mySpot === i;
+  if (isMine && myPhase === 'booked') { showMyReservation(i); return; }
+  if (isMine && myPhase === 'parked') { showParked(i); return; }
+  if (sp.state === 'free')   { showBook(i); return; }
+  if (sp.state === 'parked') { showUnavail(i, true); return; }
+  if (sp.state === 'booked') { showUnavail(i, false); return; }
 }
 
-function showBook(sp) {
+function showBook(i) {
   document.getElementById('modal-content').innerHTML =
-    '<h2>Book spot ' + sp.label + '</h2>' +
+    '<h2>Book spot ' + LABELS[i] + '</h2>' +
     '<p>Reserve this spot now. The gate will close immediately. You have 30 minutes to arrive. Billing starts from confirmation.</p>' +
     '<div class="price-tag">&euro;0.05 <span>/ minute</span></div>' +
-    '<button class="btn btn-blue" onclick="confirmBook(' + sp.id + ')">Confirm reservation</button>' +
+    '<button class="btn btn-blue" onclick="confirmBook(' + i + ')">Confirm reservation</button>' +
     '<button class="btn btn-gray" onclick="closeModal()">Cancel</button>';
   openModal();
 }
 
-function confirmBook(id) {
-  if (mySpot !== null && mySpot !== id) {
-    alert('You already have an active reservation. Cancel it first.');
-    return;
-  }
-  spots[id].state = 'booked';
-  spots[id].bookedAt = Date.now();
-  mySpot = id;
-  myBookedAt = Date.now();
-  gateCommand(id, 'close');
-  if (expireTimer) clearInterval(expireTimer);
-  expireTimer = setInterval(checkExpire, 15000);
+async function confirmBook(i) {
+  if (mySpot !== null) { alert('You already have an active reservation.'); return; }
+  const res = await apiPost('/api/reserve', { spot: i });
+  if (res.status === 409) { alert('Someone just took that spot!'); pollStatus(); closeModal(); return; }
+  const data = await res.json();
+  mySpot = i; myBookedAt = data.bookedAt; myPhase = 'booked';
+  saveSession();
   closeModal();
   render();
 }
 
-function checkExpire() {
-  if (mySpot === null) return;
-  const sp = spots[mySpot];
-  if (sp.state === 'booked' && minsElapsed(myBookedAt) >= EXPIRE_MIN) {
-    gateCommand(mySpot, 'open');
-    sp.state = 'free';
-    sp.bookedAt = null;
-    mySpot = null;
-    myBookedAt = null;
-    clearInterval(expireTimer);
-    render();
-    alert('Your reservation expired (30 min). The spot has been released and the gate is open again.');
-  }
-}
-
-function showMyReservation(sp) {
+function showMyReservation(i) {
   const elapsed = minsElapsed(myBookedAt);
-  const rem = Math.max(0, EXPIRE_MIN - elapsed);
+  const rem  = Math.max(0, EXPIRE_MIN - elapsed);
   const cost = calcCost(myBookedAt);
   document.getElementById('modal-content').innerHTML =
-    '<h2>Your reservation &mdash; ' + sp.label + '</h2>' +
-    '<div class="notice">&#9200; You have <strong>' + rem + ' min</strong> left to arrive or the spot will be released.</div>' +
+    '<h2>Your reservation &mdash; ' + LABELS[i] + '</h2>' +
+    '<div class="notice">&#9200; You have <strong>' + rem + ' min</strong> left to arrive.</div>' +
     '<div class="cost-box"><div class="cost-row"><span>Running cost</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
-    '<div class="cost-sub">' + elapsed + ' min &times; &euro;0.05 &mdash; updates on open</div></div>' +
-    '<button class="btn btn-green" onclick="arriveAtSpot(' + sp.id + ')">&#128663; I am here &mdash; open gate</button>' +
-    '<button class="btn btn-red"   onclick="cancelRes(' + sp.id + ')">Cancel reservation</button>' +
+    '<div class="cost-sub">' + elapsed + ' min &times; &euro;0.05</div></div>' +
+    '<button class="btn btn-green" onclick="arrive(' + i + ')">&#128663; I am here &mdash; open gate</button>' +
+    '<button class="btn btn-red"   onclick="cancelRes(' + i + ')">Cancel reservation</button>' +
     '<button class="btn btn-gray"  onclick="closeModal()">Close</button>';
   openModal();
 }
 
-function arriveAtSpot(id) {
-  gateCommand(id, 'open');
-  spots[id].state = 'parked';
-  if (expireTimer) clearInterval(expireTimer);
-  closeModal();
-  render();
-  setTimeout(() => showParked(spots[id]), 300);
+async function arrive(i) {
+  await apiPost('/api/arrive', { spot: i });
+  myPhase = 'parked'; saveSession();
+  closeModal(); render();
+  setTimeout(() => showParked(i), 300);
 }
 
-function showParked(sp) {
+function showParked(i) {
   const cost = calcCost(myBookedAt);
   const elapsed = minsElapsed(myBookedAt);
   document.getElementById('modal-content').innerHTML =
-    '<h2>Parked &mdash; spot ' + sp.label + '</h2>' +
+    '<h2>Parked &mdash; spot ' + LABELS[i] + '</h2>' +
     '<div class="cost-box"><div class="cost-row"><span>Total so far</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
     '<div class="cost-sub">' + elapsed + ' min since booking &middot; &euro;0.05/min</div></div>' +
-    '<button class="btn btn-red"  onclick="leaveSpot(' + sp.id + ')">&#128663; Leave &mdash; session ended</button>' +
+    '<button class="btn btn-red"  onclick="leave(' + i + ')">&#128663; Leave &mdash; session ended</button>' +
     '<button class="btn btn-gray" onclick="closeModal()">Close</button>';
   openModal();
 }
 
-function leaveSpot(id) {
+async function leave(i) {
   const cost = calcCost(myBookedAt);
-  gateCommand(id, 'open');
-  spots[id].state = 'free';
-  spots[id].bookedAt = null;
-  mySpot = null;
-  myBookedAt = null;
-  closeModal();
-  render();
+  await apiPost('/api/release', { spot: i });
+  clearSession(); closeModal(); render();
   alert('Session ended. Total charge: \u20AC' + cost + '. Safe travels!');
 }
 
-function cancelRes(id) {
-  gateCommand(id, 'open');
-  spots[id].state = 'free';
-  spots[id].bookedAt = null;
-  mySpot = null;
-  myBookedAt = null;
-  if (expireTimer) clearInterval(expireTimer);
-  closeModal();
-  render();
+async function cancelRes(i) {
+  await apiPost('/api/release', { spot: i });
+  clearSession(); closeModal(); render();
 }
 
-function showUnavail(sp, physical) {
+function showUnavail(i, physical) {
   document.getElementById('modal-content').innerHTML =
-    '<h2>Spot ' + sp.label + ' unavailable</h2>' +
-    '<p>' + (physical ? 'A car is physically in this spot (detected by IR sensor).' : 'This spot has already been reserved by someone else.') + '</p>' +
+    '<h2>Spot ' + LABELS[i] + ' unavailable</h2>' +
+    '<p>' + (physical ? 'A car is physically in this spot.' : 'This spot has already been reserved by someone else.') + '</p>' +
     '<button class="btn btn-gray" onclick="closeModal()">Got it</button>';
   openModal();
 }
