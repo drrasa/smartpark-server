@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>SmartPark</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+  .page { max-width: 480px; margin: 0 auto; padding: 16px; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .stat { background: #fff; border-radius: 12px; padding: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .stat .val { font-size: 26px; font-weight: 600; }
+  .stat .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+  .val-free { color: #34c759; }
+  .val-res  { color: #ff9500; }
+  .val-occ  { color: #ff3b30; }
+  .sec-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .spots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .spot { background: #fff; border: 2px solid #e0e0e0; border-radius: 16px; padding: 14px; cursor: pointer; transition: all .15s; position: relative; -webkit-tap-highlight-color: transparent; }
+  .spot:active { transform: scale(0.97); }
+  .spot.free   { border-color: #34c759; }
+  .spot.taken  { border-color: #ff3b30; background: #fff5f5; cursor: default; }
+  .spot.booked { border-color: #ff9500; }
+  .spot.mine   { border-color: #007aff; }
+  .spot-icon { font-size: 30px; margin-bottom: 6px; }
+  .spot-name { font-size: 16px; font-weight: 600; }
+  .spot-sub  { font-size: 12px; margin-top: 3px; }
+  .sub-free   { color: #34c759; }
+  .sub-taken  { color: #ff3b30; }
+  .sub-booked { color: #ff9500; }
+  .sub-mine   { color: #007aff; }
+  .badge { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+  .badge-free   { background: #d4f5dc; color: #1a7a35; }
+  .badge-taken  { background: #ffd6d4; color: #9e1f1a; }
+  .badge-booked { background: #ffecd4; color: #8f4d00; }
+  .badge-mine   { background: #d6eaff; color: #00408f; }
+  .timer-bar { height: 3px; border-radius: 2px; background: #eee; margin-top: 8px; overflow: hidden; }
+  .timer-fill { height: 100%; border-radius: 2px; background: #ff9500; transition: width .5s; }
+  .timer-txt { font-size: 11px; color: #888; margin-top: 4px; }
+  .rate-box { background: #fff; border-radius: 12px; padding: 12px 14px; font-size: 13px; color: #555; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: flex-end; justify-content: center; padding: 0; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 20px 20px 32px; width: 100%; max-width: 480px; }
+  .modal-handle { width: 36px; height: 4px; background: #ddd; border-radius: 2px; margin: 0 auto 16px; }
+  .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .modal p  { font-size: 14px; color: #555; margin-bottom: 14px; line-height: 1.5; }
+  .cost-box { background: #f5f5f7; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+  .cost-row { display: flex; justify-content: space-between; align-items: center; }
+  .cost-amt { font-size: 24px; font-weight: 600; }
+  .cost-sub { font-size: 11px; color: #888; margin-top: 4px; }
+  .notice { background: #fff8ec; border: 1px solid #ffd080; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #7a4f00; margin-bottom: 14px; line-height: 1.5; }
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; margin-bottom: 8px; -webkit-tap-highlight-color: transparent; }
+  .btn:active { opacity: .8; }
+  .btn-blue    { background: #007aff; color: #fff; }
+  .btn-green   { background: #34c759; color: #fff; }
+  .btn-red     { background: #ff3b30; color: #fff; }
+  .btn-gray    { background: #e5e5ea; color: #1d1d1f; }
+  .price-tag { font-size: 22px; font-weight: 600; margin-bottom: 14px; }
+  .price-tag span { font-size: 14px; color: #888; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1><span class="dot"></span>SmartPark</h1>
+    <span style="font-size:12px;color:#888">Live · 4 spots</span>
+  </div>
+  <div class="summary">
+    <div class="stat"><div class="val val-free" id="st-free">-</div><div class="lbl">Free</div></div>
+    <div class="stat"><div class="val val-res"  id="st-res">-</div><div class="lbl">Reserved</div></div>
+    <div class="stat"><div class="val val-occ"  id="st-occ">-</div><div class="lbl">Occupied</div></div>
+  </div>
+  <div class="sec-title">Parking spots</div>
+  <div class="spots" id="spots-grid"></div>
+  <div class="sec-title">Rate info</div>
+  <div class="rate-box">
+    &euro;0.05 / minute &nbsp;&bull;&nbsp; Reservation expires after 30 min if you don't arrive &nbsp;&bull;&nbsp; Billing starts on booking &nbsp;&bull;&nbsp; Gates open by default &mdash; close on reservation
+  </div>
+</div>
+
+<div class="modal-bg" id="modal" onclick="bgClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+const RATE = 0.05;
+const EXPIRE_MIN = 30;
+
+const spots = [
+  { id: 0, label: 'A1', irOccupied: false, state: 'free', bookedAt: null },
+  { id: 1, label: 'A2', irOccupied: false, state: 'free', bookedAt: null },
+  { id: 2, label: 'B1', irOccupied: false, state: 'free', bookedAt: null },
+  { id: 3, label: 'B2', irOccupied: false, state: 'free', bookedAt: null },
+];
+
+let mySpot = null;
+let myBookedAt = null;
+let expireTimer = null;
+
+async function pollStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    data.spots.forEach((occupied, i) => {
+      spots[i].irOccupied = occupied === 1;
+      if (spots[i].irOccupied && spots[i].state === 'free') spots[i].state = 'taken';
+      if (!spots[i].irOccupied && spots[i].state === 'taken') spots[i].state = 'free';
+    });
+    render();
+  } catch(e) { console.log('Poll failed:', e); }
+}
+
+async function gateCommand(spotId, action) {
+  try {
+    await fetch('/api/gate?spot=' + spotId + '&action=' + action);
+  } catch(e) { console.log('Gate command failed:', e); }
+}
+
+function minsElapsed(ts) { return Math.floor((Date.now() - ts) / 60000); }
+function calcCost(ts) { return (minsElapsed(ts) * RATE).toFixed(2); }
+
+function render() {
+  const grid = document.getElementById('spots-grid');
+  grid.innerHTML = '';
+  let free = 0, res = 0, occ = 0;
+
+  spots.forEach(sp => {
+    const isMine = mySpot === sp.id;
+    let displayState = sp.state;
+    if (isMine && sp.state === 'booked') displayState = 'mine-booked';
+    if (isMine && sp.state === 'parked') displayState = 'mine-parked';
+    if (sp.state === 'free') free++;
+    else if (sp.state === 'taken') occ++;
+    else if (sp.state === 'booked') res++;
+
+    const icons  = { free:'🟢', taken:'🔴', booked:'🟠', 'mine-booked':'🔵', 'mine-parked':'🔵' };
+    const labels = { free:'Available', taken:'Occupied', booked:'Reserved', 'mine-booked':'Your reservation', 'mine-parked':'You are parked' };
+    const subCls = { free:'sub-free', taken:'sub-taken', booked:'sub-booked', 'mine-booked':'sub-mine', 'mine-parked':'sub-mine' };
+    const bdgTxt = { free:'FREE', taken:'TAKEN', booked:'RESERVED', 'mine-booked':'MINE', 'mine-parked':'PARKED' };
+    const bdgCls = { free:'badge-free', taken:'badge-taken', booked:'badge-booked', 'mine-booked':'badge-mine', 'mine-parked':'badge-mine' };
+    const spotCls= { free:'free', taken:'taken', booked:'booked', 'mine-booked':'mine', 'mine-parked':'mine' };
+
+    let timerHTML = '';
+    if (sp.state === 'booked' && sp.bookedAt) {
+      const pct = Math.min(100, (minsElapsed(sp.bookedAt) / EXPIRE_MIN) * 100);
+      const rem = Math.max(0, EXPIRE_MIN - minsElapsed(sp.bookedAt));
+      timerHTML = '<div class="timer-bar"><div class="timer-fill" style="width:' + pct + '%"></div></div>'
+                + '<div class="timer-txt">Expires in ' + rem + ' min</div>';
+    }
+
+    const div = document.createElement('div');
+    div.className = 'spot ' + (spotCls[displayState] || 'free');
+    div.innerHTML =
+      '<div class="spot-icon">' + (icons[displayState]||'⬜') + '</div>' +
+      '<div class="spot-name">Spot ' + sp.label + '</div>' +
+      '<div class="spot-sub ' + (subCls[displayState]||'') + '">' + (labels[displayState]||'') + '</div>' +
+      '<span class="badge ' + (bdgCls[displayState]||'') + '">' + (bdgTxt[displayState]||'') + '</span>' +
+      timerHTML;
+    div.onclick = () => spotClick(sp.id);
+    grid.appendChild(div);
+  });
+
+  document.getElementById('st-free').textContent = free;
+  document.getElementById('st-res').textContent  = res;
+  document.getElementById('st-occ').textContent  = occ;
+}
+
+function spotClick(id) {
+  const sp = spots[id];
+  const isMine = mySpot === id;
+  if (isMine && sp.state === 'booked') { showMyReservation(sp); return; }
+  if (isMine && sp.state === 'parked') { showParked(sp); return; }
+  if (sp.state === 'free')             { showBook(sp); return; }
+  if (sp.state === 'taken')            { showUnavail(sp, true); return; }
+  if (sp.state === 'booked')           { showUnavail(sp, false); return; }
+}
+
+function showBook(sp) {
+  document.getElementById('modal-content').innerHTML =
+    '<h2>Book spot ' + sp.label + '</h2>' +
+    '<p>Reserve this spot now. The gate will close immediately. You have 30 minutes to arrive. Billing starts from confirmation.</p>' +
+    '<div class="price-tag">&euro;0.05 <span>/ minute</span></div>' +
+    '<button class="btn btn-blue" onclick="confirmBook(' + sp.id + ')">Confirm reservation</button>' +
+    '<button class="btn btn-gray" onclick="closeModal()">Cancel</button>';
+  openModal();
+}
+
+function confirmBook(id) {
+  if (mySpot !== null && mySpot !== id) {
+    alert('You already have an active reservation. Cancel it first.');
+    return;
+  }
+  spots[id].state = 'booked';
+  spots[id].bookedAt = Date.now();
+  mySpot = id;
+  myBookedAt = Date.now();
+  gateCommand(id, 'close');
+  if (expireTimer) clearInterval(expireTimer);
+  expireTimer = setInterval(checkExpire, 15000);
+  closeModal();
+  render();
+}
+
+function checkExpire() {
+  if (mySpot === null) return;
+  const sp = spots[mySpot];
+  if (sp.state === 'booked' && minsElapsed(myBookedAt) >= EXPIRE_MIN) {
+    gateCommand(mySpot, 'open');
+    sp.state = 'free';
+    sp.bookedAt = null;
+    mySpot = null;
+    myBookedAt = null;
+    clearInterval(expireTimer);
+    render();
+    alert('Your reservation expired (30 min). The spot has been released and the gate is open again.');
+  }
+}
+
+function showMyReservation(sp) {
+  const elapsed = minsElapsed(myBookedAt);
+  const rem = Math.max(0, EXPIRE_MIN - elapsed);
+  const cost = calcCost(myBookedAt);
+  document.getElementById('modal-content').innerHTML =
+    '<h2>Your reservation &mdash; ' + sp.label + '</h2>' +
+    '<div class="notice">&#9200; You have <strong>' + rem + ' min</strong> left to arrive or the spot will be released.</div>' +
+    '<div class="cost-box"><div class="cost-row"><span>Running cost</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
+    '<div class="cost-sub">' + elapsed + ' min &times; &euro;0.05 &mdash; updates on open</div></div>' +
+    '<button class="btn btn-green" onclick="arriveAtSpot(' + sp.id + ')">&#128663; I am here &mdash; open gate</button>' +
+    '<button class="btn btn-red"   onclick="cancelRes(' + sp.id + ')">Cancel reservation</button>' +
+    '<button class="btn btn-gray"  onclick="closeModal()">Close</button>';
+  openModal();
+}
+
+function arriveAtSpot(id) {
+  gateCommand(id, 'open');
+  spots[id].state = 'parked';
+  if (expireTimer) clearInterval(expireTimer);
+  closeModal();
+  render();
+  setTimeout(() => showParked(spots[id]), 300);
+}
+
+function showParked(sp) {
+  const cost = calcCost(myBookedAt);
+  const elapsed = minsElapsed(myBookedAt);
+  document.getElementById('modal-content').innerHTML =
+    '<h2>Parked &mdash; spot ' + sp.label + '</h2>' +
+    '<div class="cost-box"><div class="cost-row"><span>Total so far</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
+    '<div class="cost-sub">' + elapsed + ' min since booking &middot; &euro;0.05/min</div></div>' +
+    '<button class="btn btn-red"  onclick="leaveSpot(' + sp.id + ')">&#128663; Leave &mdash; session ended</button>' +
+    '<button class="btn btn-gray" onclick="closeModal()">Close</button>';
+  openModal();
+}
+
+function leaveSpot(id) {
+  const cost = calcCost(myBookedAt);
+  gateCommand(id, 'open');
+  spots[id].state = 'free';
+  spots[id].bookedAt = null;
+  mySpot = null;
+  myBookedAt = null;
+  closeModal();
+  render();
+  alert('Session ended. Total charge: \u20AC' + cost + '. Safe travels!');
+}
+
+function cancelRes(id) {
+  gateCommand(id, 'open');
+  spots[id].state = 'free';
+  spots[id].bookedAt = null;
+  mySpot = null;
+  myBookedAt = null;
+  if (expireTimer) clearInterval(expireTimer);
+  closeModal();
+  render();
+}
+
+function showUnavail(sp, physical) {
+  document.getElementById('modal-content').innerHTML =
+    '<h2>Spot ' + sp.label + ' unavailable</h2>' +
+    '<p>' + (physical ? 'A car is physically in this spot (detected by IR sensor).' : 'This spot has already been reserved by someone else.') + '</p>' +
+    '<button class="btn btn-gray" onclick="closeModal()">Got it</button>';
+  openModal();
+}
+
+function openModal()  { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function bgClick(e)   { if (e.target.id === 'modal') closeModal(); }
+
+pollStatus();
+setInterval(pollStatus, 3000);
+setInterval(render, 10000);
+</script>
+</body>
+</html>
