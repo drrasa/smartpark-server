@@ -131,8 +131,9 @@ async function pollStatus() {
     const data = await res.json();
     serverStates = data.states;
 
-    // If server says my spot is free but I think I have it -> session expired server-side
-    if (mySpot !== null && serverStates[mySpot].state === 'free' && myPhase) {
+    // Only clear session if server says free AND we were just booked (not parked)
+    // When parked, server keeps state=parked via manualParked flag
+    if (mySpot !== null && serverStates[mySpot].state === 'free' && myPhase === 'booked') {
       clearSession();
     }
     render();
