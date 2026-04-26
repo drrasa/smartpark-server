@@ -18,6 +18,7 @@ let pendingCmds = [];
 
 const EXPIRE_MS = 30 * 60 * 1000;
 
+// Auto-expire reservations after 30 min
 setInterval(() => {
   const now = Date.now();
   spotState.forEach((sp, i) => {
@@ -36,16 +37,23 @@ app.post('/esp/sync', (req, res) => {
   if (Array.isArray(spots)) {
     spots.forEach((occupied, i) => {
       irStatus[i] = occupied;
-      if (!occupied && spotState[i].state === 'parked') {
+      const prev = spotState[i].state;
+
+      // Car detected in a booked spot -> they arrived, mark as parked
+      if (occupied && prev === 'booked') {
+        spotState[i].state = 'parked';
+      }
+      // Car gone from a parked spot -> free it
+      if (!occupied && prev === 'parked') {
         spotState[i].state = 'free';
         spotState[i].bookedAt = null;
       }
-      if (occupied && spotState[i].state === 'booked') {
+      // Unknown car in a free spot -> parked
+      if (occupied && prev === 'free') {
         spotState[i].state = 'parked';
       }
-      if (occupied && spotState[i].state === 'free') {
-        spotState[i].state = 'parked';
-      }
+      // IR = 0 does NOT touch 'booked' state —
+      // car hasn't arrived yet, don't reset reservation
     });
   }
   const cmds = [...pendingCmds];
@@ -93,14 +101,6 @@ app.post('/api/release', (req, res) => {
   spotState[spot].bookedAt = null;
   pendingCmds.push({ spot, action: 'open' });
   res.json({ ok: true });
-});
-
-app.get('/api/gate', (req, res) => {
-  const spot   = parseInt(req.query.spot);
-  const action = req.query.action;
-  if (isNaN(spot) || spot < 0 || spot > 3) return res.status(400).send('Bad spot');
-  pendingCmds.push({ spot, action });
-  res.send('OK');
 });
 
 const PORT = process.env.PORT || 3000;
