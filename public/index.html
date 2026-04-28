@@ -4,82 +4,387 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>SmartPark</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg:       #080c12;
+    --surface:  #0e1420;
+    --surface2: #151d2e;
+    --border:   #1e2d45;
+    --text:     #e8edf5;
+    --muted:    #4a5d78;
+    --accent:   #00d4ff;
+    --green:    #00e87a;
+    --orange:   #ff8c00;
+    --red:      #ff3355;
+    --blue:     #3b82f6;
+    --glow-g:   rgba(0,232,122,.15);
+    --glow-o:   rgba(255,140,0,.15);
+    --glow-r:   rgba(255,51,85,.15);
+    --glow-b:   rgba(59,130,246,.15);
+    --glow-a:   rgba(0,212,255,.2);
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; }
-  .page { max-width: 480px; margin: 0 auto; padding: 16px; }
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
-  .header h1 { font-size: 20px; font-weight: 600; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-  .stat { background: #fff; border-radius: 12px; padding: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  .stat .val { font-size: 26px; font-weight: 600; }
-  .stat .lbl { font-size: 11px; color: #888; margin-top: 2px; }
-  .val-free { color: #34c759; }
-  .val-res  { color: #ff9500; }
-  .val-occ  { color: #ff3b30; }
-  .sec-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-  .spots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-  .spot { background: #fff; border: 2px solid #e0e0e0; border-radius: 16px; padding: 14px; cursor: pointer; transition: all .15s; position: relative; -webkit-tap-highlight-color: transparent; }
-  .spot:active { transform: scale(0.97); }
-  .spot.free   { border-color: #34c759; }
-  .spot.taken  { border-color: #ff3b30; background: #fff5f5; cursor: default; }
-  .spot.booked { border-color: #ff9500; cursor: default; }
-  .spot.mine   { border-color: #007aff; }
-  .spot-icon { font-size: 30px; margin-bottom: 6px; }
-  .spot-name { font-size: 16px; font-weight: 600; }
-  .spot-sub  { font-size: 12px; margin-top: 3px; }
-  .sub-free   { color: #34c759; }
-  .sub-taken  { color: #ff3b30; }
-  .sub-booked { color: #ff9500; }
-  .sub-mine   { color: #007aff; }
-  .badge { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
-  .badge-free   { background: #d4f5dc; color: #1a7a35; }
-  .badge-taken  { background: #ffd6d4; color: #9e1f1a; }
-  .badge-booked { background: #ffecd4; color: #8f4d00; }
-  .badge-mine   { background: #d6eaff; color: #00408f; }
-  .timer-bar { height: 3px; border-radius: 2px; background: #eee; margin-top: 8px; overflow: hidden; }
-  .timer-fill { height: 100%; border-radius: 2px; background: #ff9500; transition: width .5s; }
-  .timer-txt { font-size: 11px; color: #888; margin-top: 4px; }
-  .rate-box { background: #fff; border-radius: 12px; padding: 12px 14px; font-size: 13px; color: #555; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: flex-end; justify-content: center; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.5px;
+    color: var(--text);
+  }
+  .header h1 span.logo-accent { color: var(--accent); }
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,232,122,.08);
+    border: 1px solid rgba(0,232,122,.2);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: .05em;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,232,122,.4)} 50%{opacity:.6;box-shadow:0 0 0 4px rgba(0,232,122,0)} }
+
+  /* Summary */
+  .summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .stat::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 0 0 14px 14px;
+  }
+  .stat:nth-child(1)::after { background: var(--green); }
+  .stat:nth-child(2)::after { background: var(--orange); }
+  .stat:nth-child(3)::after { background: var(--red); }
+  .stat .val {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .val-free { color: var(--green); }
+  .val-res  { color: var(--orange); }
+  .val-occ  { color: var(--red); }
+
+  /* Section title */
+  .sec-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin-bottom: 12px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Spot grid */
+  .spots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .spot {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .spot::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .spot:active { transform: scale(0.96); }
+
+  .spot.free   { border-color: rgba(0,232,122,.35); }
+  .spot.free::before   { background: var(--glow-g); opacity: 1; }
+  .spot.taken  { border-color: rgba(255,51,85,.35); cursor: default; }
+  .spot.taken::before  { background: var(--glow-r); opacity: 1; }
+  .spot.booked { border-color: rgba(255,140,0,.35); cursor: default; }
+  .spot.booked::before { background: var(--glow-o); opacity: 1; }
+  .spot.mine   { border-color: rgba(59,130,246,.5); }
+  .spot.mine::before   { background: var(--glow-b); opacity: 1; }
+
+  .spot-icon {
+    font-size: 26px;
+    margin-bottom: 8px;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+  .spot-name {
+    font-size: 18px;
+    font-weight: 800;
+    position: relative;
+    z-index: 1;
+    letter-spacing: -.3px;
+  }
+  .spot-sub {
+    font-size: 11px;
+    margin-top: 3px;
+    font-family: 'Space Mono', monospace;
+    position: relative;
+    z-index: 1;
+  }
+  .sub-free   { color: var(--green); }
+  .sub-taken  { color: var(--red); }
+  .sub-booked { color: var(--orange); }
+  .sub-mine   { color: var(--blue); }
+
+  .badge {
+    position: absolute;
+    top: 10px; right: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: .06em;
+    z-index: 1;
+  }
+  .badge-free   { background: rgba(0,232,122,.15);  color: var(--green); border: 1px solid rgba(0,232,122,.3); }
+  .badge-taken  { background: rgba(255,51,85,.15);  color: var(--red);   border: 1px solid rgba(255,51,85,.3); }
+  .badge-booked { background: rgba(255,140,0,.15);  color: var(--orange);border: 1px solid rgba(255,140,0,.3); }
+  .badge-mine   { background: rgba(59,130,246,.15); color: var(--blue);  border: 1px solid rgba(59,130,246,.3); }
+
+  .timer-bar {
+    height: 2px;
+    border-radius: 2px;
+    background: rgba(255,140,0,.2);
+    margin-top: 10px;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+  }
+  .timer-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--orange);
+    box-shadow: 0 0 6px var(--orange);
+    transition: width .5s;
+  }
+  .timer-txt {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 5px;
+    font-family: 'Space Mono', monospace;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Rate box */
+  .rate-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+    font-family: 'Space Mono', monospace;
+  }
+  .rate-box strong { color: var(--accent); }
+
+  /* Modal */
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: flex-end;
+    justify-content: center;
+  }
   .modal-bg.open { display: flex; }
-  .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 20px 20px 32px; width: 100%; max-width: 480px; }
-  .modal-handle { width: 36px; height: 4px; background: #ddd; border-radius: 2px; margin: 0 auto 16px; }
-  .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
-  .modal p  { font-size: 14px; color: #555; margin-bottom: 14px; line-height: 1.5; }
-  .cost-box { background: #f5f5f7; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 1px solid rgba(0,212,255,.15);
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px 36px;
+    width: 100%;
+    max-width: 480px;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-handle {
+    width: 36px; height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal h2 {
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: -.3px;
+  }
+  .modal p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+    line-height: 1.6;
+    font-family: 'Space Mono', monospace;
+  }
+  .cost-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
   .cost-row { display: flex; justify-content: space-between; align-items: center; }
-  .cost-amt { font-size: 24px; font-weight: 600; }
-  .cost-sub { font-size: 11px; color: #888; margin-top: 4px; }
-  .notice { background: #fff8ec; border: 1px solid #ffd080; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #7a4f00; margin-bottom: 14px; line-height: 1.5; }
-  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; margin-bottom: 8px; }
-  .btn:active { opacity: .8; }
-  .btn-blue  { background: #007aff; color: #fff; }
-  .btn-green { background: #34c759; color: #fff; }
-  .btn-red   { background: #ff3b30; color: #fff; }
-  .btn-gray  { background: #e5e5ea; color: #1d1d1f; }
-  .price-tag { font-size: 22px; font-weight: 600; margin-bottom: 14px; }
-  .price-tag span { font-size: 14px; color: #888; font-weight: 400; }
+  .cost-row span:first-child { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; }
+  .cost-amt {
+    font-family: 'Space Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .cost-sub { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: 'Space Mono', monospace; }
+
+  .notice {
+    background: rgba(255,140,0,.08);
+    border: 1px solid rgba(255,140,0,.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--orange);
+    margin-bottom: 16px;
+    line-height: 1.6;
+    font-family: 'Space Mono', monospace;
+  }
+  .price-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .price-tag span { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 8px;
+    font-family: 'Syne', sans-serif;
+    letter-spacing: .02em;
+    transition: opacity .15s, transform .15s;
+  }
+  .btn:active { opacity: .8; transform: scale(.98); }
+  .btn-blue  { background: var(--blue);   color: #fff; box-shadow: 0 0 20px rgba(59,130,246,.3); }
+  .btn-green { background: var(--green);  color: #000; box-shadow: 0 0 20px rgba(0,232,122,.3); }
+  .btn-red   { background: var(--red);    color: #fff; box-shadow: 0 0 20px rgba(255,51,85,.3); }
+  .btn-gray  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); box-shadow: none; }
 </style>
 </head>
 <body>
 <div class="page">
   <div class="header">
-    <h1><span class="dot"></span>SmartPark</h1>
-    <span style="font-size:12px;color:#888">Live · 4 spots</span>
+    <h1>Smart<span class="logo-accent">Park</span></h1>
+    <div class="live-badge"><span class="dot"></span>LIVE · 4 SPOTS</div>
   </div>
+
   <div class="summary">
     <div class="stat"><div class="val val-free" id="st-free">-</div><div class="lbl">Free</div></div>
     <div class="stat"><div class="val val-res"  id="st-res">-</div><div class="lbl">Reserved</div></div>
     <div class="stat"><div class="val val-occ"  id="st-occ">-</div><div class="lbl">Occupied</div></div>
   </div>
-  <div class="sec-title">Parking spots</div>
+
+  <div class="sec-title">// parking spots</div>
   <div class="spots" id="spots-grid"></div>
-  <div class="sec-title">Rate info</div>
+
+  <div class="sec-title">// rate info</div>
   <div class="rate-box">
-    &euro;0.05 / minute &nbsp;&bull;&nbsp; Reservation expires after 30 min if you don't arrive &nbsp;&bull;&nbsp; Billing starts on booking &nbsp;&bull;&nbsp; Gates open by default &mdash; close on reservation
+    <strong>€0.05</strong> / min &nbsp;·&nbsp; Reservation expires after <strong>30 min</strong> &nbsp;·&nbsp; Billing starts on booking &nbsp;·&nbsp; Gates open by default
   </div>
 </div>
 
@@ -95,12 +400,10 @@ const RATE = 0.05;
 const EXPIRE_MIN = 30;
 const LABELS = ['A1','A2','B1','B2'];
 
-// My session — stored in localStorage so it survives page refresh
 let mySpot     = localStorage.getItem('mySpot')     !== null ? parseInt(localStorage.getItem('mySpot')) : null;
 let myBookedAt = localStorage.getItem('myBookedAt') !== null ? parseInt(localStorage.getItem('myBookedAt')) : null;
-let myPhase    = localStorage.getItem('myPhase')    || null; // 'booked' | 'parked'
+let myPhase    = localStorage.getItem('myPhase')    || null;
 
-// Server state (updated every 3s)
 let serverStates = [
   { state: 'free', bookedAt: null },
   { state: 'free', bookedAt: null },
@@ -119,33 +422,20 @@ function saveSession() {
     localStorage.removeItem('myPhase');
   }
 }
-
-function clearSession() {
-  mySpot = null; myBookedAt = null; myPhase = null;
-  saveSession();
-}
+function clearSession() { mySpot = null; myBookedAt = null; myPhase = null; saveSession(); }
 
 async function pollStatus() {
   try {
     const res  = await fetch('/api/status');
     const data = await res.json();
     serverStates = data.states;
-
-    // Only clear session if server says free AND we were just booked (not parked)
-    // When parked, server keeps state=parked via manualParked flag
-    if (mySpot !== null && serverStates[mySpot].state === 'free' && myPhase === 'booked') {
-      clearSession();
-    }
+    if (mySpot !== null && serverStates[mySpot].state === 'free' && myPhase === 'booked') clearSession();
     render();
   } catch(e) { console.log('Poll failed:', e); }
 }
 
 async function apiPost(path, body) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const res = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
   return res;
 }
 
@@ -159,16 +449,16 @@ function render() {
 
   serverStates.forEach((sp, i) => {
     const isMine = mySpot === i;
-    let display = sp.state; // free | booked | parked
+    let display = sp.state;
     if (isMine && myPhase === 'booked') display = 'mine-booked';
     if (isMine && myPhase === 'parked') display = 'mine-parked';
 
-    if (sp.state === 'free')   free++;
+    if (sp.state === 'free')        free++;
     else if (sp.state === 'parked') occ++;
     else if (sp.state === 'booked') res++;
 
     const icons  = { free:'🟢', parked:'🔴', booked:'🟠', 'mine-booked':'🔵', 'mine-parked':'🔵' };
-    const labels = { free:'Available', parked:'Occupied', booked:'Reserved', 'mine-booked':'Your reservation', 'mine-parked':'You are parked' };
+    const labels = { free:'available', parked:'occupied', booked:'reserved', 'mine-booked':'your spot', 'mine-parked':'parked' };
     const subCls = { free:'sub-free', parked:'sub-taken', booked:'sub-booked', 'mine-booked':'sub-mine', 'mine-parked':'sub-mine' };
     const bdgTxt = { free:'FREE', parked:'TAKEN', booked:'RESERVED', 'mine-booked':'MINE', 'mine-parked':'PARKED' };
     const bdgCls = { free:'badge-free', parked:'badge-taken', booked:'badge-booked', 'mine-booked':'badge-mine', 'mine-parked':'badge-mine' };
@@ -180,13 +470,13 @@ function render() {
       const pct = Math.min(100, (minsElapsed(bookedAt) / EXPIRE_MIN) * 100);
       const rem = Math.max(0, EXPIRE_MIN - minsElapsed(bookedAt));
       timerHTML = '<div class="timer-bar"><div class="timer-fill" style="width:' + pct + '%"></div></div>'
-                + '<div class="timer-txt">Expires in ' + rem + ' min</div>';
+                + '<div class="timer-txt">' + rem + ' min left</div>';
     }
 
     const div = document.createElement('div');
     div.className = 'spot ' + (spotCls[display] || 'free');
     div.innerHTML =
-      '<div class="spot-icon">' + (icons[display]||'⬜') + '</div>' +
+      '<span class="spot-icon">' + (icons[display]||'⬜') + '</span>' +
       '<div class="spot-name">Spot ' + LABELS[i] + '</div>' +
       '<div class="spot-sub ' + (subCls[display]||'') + '">' + (labels[display]||'') + '</div>' +
       '<span class="badge ' + (bdgCls[display]||'') + '">' + (bdgTxt[display]||'') + '</span>' +
@@ -212,10 +502,10 @@ function spotClick(i) {
 
 function showBook(i) {
   document.getElementById('modal-content').innerHTML =
-    '<h2>Book spot ' + LABELS[i] + '</h2>' +
-    '<p>Reserve this spot now. The gate will close immediately. You have 30 minutes to arrive. Billing starts from confirmation.</p>' +
-    '<div class="price-tag">&euro;0.05 <span>/ minute</span></div>' +
-    '<button class="btn btn-blue" onclick="confirmBook(' + i + ')">Confirm reservation</button>' +
+    '<h2>Book Spot ' + LABELS[i] + '</h2>' +
+    '<p>Reserve now. Gate closes immediately. You have 30 min to arrive. Billing starts on confirmation.</p>' +
+    '<div class="price-tag">€0.05 <span>/ minute</span></div>' +
+    '<button class="btn btn-blue" onclick="confirmBook(' + i + ')">Confirm Reservation</button>' +
     '<button class="btn btn-gray" onclick="closeModal()">Cancel</button>';
   openModal();
 }
@@ -226,22 +516,20 @@ async function confirmBook(i) {
   if (res.status === 409) { alert('Someone just took that spot!'); pollStatus(); closeModal(); return; }
   const data = await res.json();
   mySpot = i; myBookedAt = data.bookedAt; myPhase = 'booked';
-  saveSession();
-  closeModal();
-  render();
+  saveSession(); closeModal(); render();
 }
 
 function showMyReservation(i) {
   const elapsed = minsElapsed(myBookedAt);
-  const rem  = Math.max(0, EXPIRE_MIN - elapsed);
+  const rem = Math.max(0, EXPIRE_MIN - elapsed);
   const cost = calcCost(myBookedAt);
   document.getElementById('modal-content').innerHTML =
-    '<h2>Your reservation &mdash; ' + LABELS[i] + '</h2>' +
-    '<div class="notice">&#9200; You have <strong>' + rem + ' min</strong> left to arrive.</div>' +
-    '<div class="cost-box"><div class="cost-row"><span>Running cost</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
-    '<div class="cost-sub">' + elapsed + ' min &times; &euro;0.05</div></div>' +
-    '<button class="btn btn-green" onclick="arrive(' + i + ')">&#128663; I am here &mdash; open gate</button>' +
-    '<button class="btn btn-red"   onclick="cancelRes(' + i + ')">Cancel reservation</button>' +
+    '<h2>Spot ' + LABELS[i] + ' — Reserved</h2>' +
+    '<div class="notice">⏰ <strong>' + rem + ' min</strong> left to arrive or spot is released.</div>' +
+    '<div class="cost-box"><div class="cost-row"><span>Running cost</span><span class="cost-amt">€' + cost + '</span></div>' +
+    '<div class="cost-sub">' + elapsed + ' min × €0.05</div></div>' +
+    '<button class="btn btn-green" onclick="arrive(' + i + ')">🚗 I\'m Here — Open Gate</button>' +
+    '<button class="btn btn-red"   onclick="cancelRes(' + i + ')">Cancel Reservation</button>' +
     '<button class="btn btn-gray"  onclick="closeModal()">Close</button>';
   openModal();
 }
@@ -257,10 +545,10 @@ function showParked(i) {
   const cost = calcCost(myBookedAt);
   const elapsed = minsElapsed(myBookedAt);
   document.getElementById('modal-content').innerHTML =
-    '<h2>Parked &mdash; spot ' + LABELS[i] + '</h2>' +
-    '<div class="cost-box"><div class="cost-row"><span>Total so far</span><span class="cost-amt">&euro;' + cost + '</span></div>' +
-    '<div class="cost-sub">' + elapsed + ' min since booking &middot; &euro;0.05/min</div></div>' +
-    '<button class="btn btn-red"  onclick="leave(' + i + ')">&#128663; Leave &mdash; session ended</button>' +
+    '<h2>Spot ' + LABELS[i] + ' — Parked</h2>' +
+    '<div class="cost-box"><div class="cost-row"><span>Total so far</span><span class="cost-amt">€' + cost + '</span></div>' +
+    '<div class="cost-sub">' + elapsed + ' min · €0.05/min</div></div>' +
+    '<button class="btn btn-red" onclick="leave(' + i + ')">🚗 Leave — End Session</button>' +
     '<button class="btn btn-gray" onclick="closeModal()">Close</button>';
   openModal();
 }
@@ -269,7 +557,7 @@ async function leave(i) {
   const cost = calcCost(myBookedAt);
   await apiPost('/api/release', { spot: i });
   clearSession(); closeModal(); render();
-  alert('Session ended. Total charge: \u20AC' + cost + '. Safe travels!');
+  alert('Session ended. Total: €' + cost + '. Safe travels!');
 }
 
 async function cancelRes(i) {
@@ -279,8 +567,8 @@ async function cancelRes(i) {
 
 function showUnavail(i, physical) {
   document.getElementById('modal-content').innerHTML =
-    '<h2>Spot ' + LABELS[i] + ' unavailable</h2>' +
-    '<p>' + (physical ? 'A car is physically in this spot.' : 'This spot has already been reserved by someone else.') + '</p>' +
+    '<h2>Spot ' + LABELS[i] + ' Unavailable</h2>' +
+    '<p>' + (physical ? 'A car is physically in this spot (IR sensor).' : 'This spot is already reserved by someone else.') + '</p>' +
     '<button class="btn btn-gray" onclick="closeModal()">Got it</button>';
   openModal();
 }
